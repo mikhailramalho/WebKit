@@ -565,6 +565,8 @@ private:
         OP_STRD_imm_T1  = 0xE840,
         OP_LDRD_imm_T1  = 0xE850,
         OP_POP_T2       = 0xE8BD,
+        OP_STREXD_T1    = 0xE8C0,
+        OP_LDREXD_T1    = 0xE8D0,
         OP_PUSH_T2      = 0xE92D,
         OP_AND_reg_T2   = 0xEA00,
         OP_TST_reg_T2   = 0xEA10,
@@ -1292,6 +1294,15 @@ public:
         m_formatter.twoWordOp12Reg4Reg4Reg4Imm8(static_cast<OpcodeID1>(opcode), rn, rt, rt2, offset);
     }
 
+    ALWAYS_INLINE void ldrexd(RegisterID rt, RegisterID rt2, RegisterID rn)
+    {
+        ASSERT(!BadReg(rt));
+        ASSERT(!BadReg(rt2));
+        ASSERT(rn != ARMRegisters::pc);
+        ASSERT(rt != rt2);
+        m_formatter.twoWordOp12Reg4Reg4Reg4Imm8(OP_LDREXD_T1, rn, rt, rt2, 0x7f);
+    }
+
     void lsl(RegisterID rd, RegisterID rm, int32_t shiftAmount)
     {
         ASSERT(!BadReg(rd));
@@ -1767,6 +1778,18 @@ public:
         opcode |= (index << 8);
 
         m_formatter.twoWordOp12Reg4Reg4Reg4Imm8(static_cast<OpcodeID1>(opcode), rn, rt, rt2, offset);
+    }
+
+    ALWAYS_INLINE void strexd(RegisterID rt, RegisterID rt2, RegisterID rn, RegisterID rd)
+    {
+        ASSERT(!BadReg(rt));
+        ASSERT(!BadReg(rt2));
+        ASSERT(!BadReg(rd));
+        ASSERT(rn != ARMRegisters::pc);
+        ASSERT(rd != rn);
+        ASSERT(rd != rt);
+        ASSERT(rd != rt2);
+        m_formatter.twoWordOp12Reg4Reg4Reg4Imm4Reg4(OP_STREXD_T1, rn, rt, rt2, 0x7, rd);
     }
 
     ALWAYS_INLINE void sub(RegisterID rd, RegisterID rn, ARMThumbImmediate imm)
@@ -2979,6 +3002,12 @@ private:
         {
             m_buffer.putShort(op | reg1);
             m_buffer.putShort((reg2 << 12) | (reg3 << 8) | imm);
+        }
+
+        ALWAYS_INLINE void twoWordOp12Reg4Reg4Reg4Imm4Reg4(OpcodeID1 op, RegisterID reg1, RegisterID reg2, RegisterID reg3, int imm4, RegisterID reg4)
+        {
+            m_buffer.putShort(op | reg1);
+            m_buffer.putShort((reg2 << 12) | (reg3 << 8) | (imm4 << 4) | reg4);
         }
 
         ALWAYS_INLINE void twoWordOp12Reg40Imm3Reg4Imm20Imm5(OpcodeID1 op, RegisterID reg1, RegisterID reg2, uint16_t imm1, uint16_t imm2, uint16_t imm3)

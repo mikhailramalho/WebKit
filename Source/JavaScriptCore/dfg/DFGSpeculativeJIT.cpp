@@ -165,9 +165,10 @@ void SpeculativeJIT::emitAllocateRawObject(GPRReg resultGPR, RegisteredStructure
             value.asInt64 = JSValue::encode(JSValue(JSValue::EncodeAsDouble, PNaN));
         else
             value.asInt64 = JSValue::encode(JSValue());
+        GPRTemporary scratch3(this);
         for (unsigned i = numElements; i < vectorLength; ++i) {
-            m_jit.store32(TrustedImm32(value.asBits.tag), MacroAssembler::Address(storageGPR, sizeof(double) * i + OBJECT_OFFSETOF(JSValue, u.asBits.tag)));
-            m_jit.store32(TrustedImm32(value.asBits.payload), MacroAssembler::Address(storageGPR, sizeof(double) * i + OBJECT_OFFSETOF(JSValue, u.asBits.payload)));
+            m_jit.store64(
+                TrustedImm32(value.asBits.tag), TrustedImm32(value.asBits.payload), scratch3.gpr(), MacroAssembler::Address(storageGPR, sizeof(double) * i));
         }
 #endif
     }
@@ -9754,9 +9755,8 @@ void SpeculativeJIT::compileNewArrayWithSpread(Node* node)
 #if USE(JSVALUE64)
             m_jit.store64(immutableButterflyGPR, &buffer[i]);
 #else
-            char* pointer = static_cast<char*>(static_cast<void*>(&buffer[i]));
-            m_jit.store32(immutableButterflyGPR, pointer + PayloadOffset);
-            m_jit.store32(TrustedImm32(JSValue::CellTag), pointer + TagOffset);
+            GPRTemporary scratch(this);
+            m_jit.store64(TrustedImm32(JSValue::CellTag), immutableButterflyGPR, scratch.gpr(), &buffer[i]);
 #endif
         } else {
             JSValueOperand input(this, use);
@@ -11392,14 +11392,12 @@ void SpeculativeJIT::compileNewStringObject(Node* node)
     m_jit.store64(
         operandGPR, JITCompiler::Address(resultGPR, JSWrapperObject::internalValueOffset()));
 #else
-    m_jit.store32(
-        TrustedImm32(JSValue::CellTag),
-        JITCompiler::Address(resultGPR, JSWrapperObject::internalValueOffset() + OBJECT_OFFSETOF(JSValue, u.asBits.tag)));
-    m_jit.store32(
-        operandGPR,
-        JITCompiler::Address(resultGPR, JSWrapperObject::internalValueOffset() + OBJECT_OFFSETOF(JSValue, u.asBits.payload)));
+    GPRTemporary scratch3(this);
+    m_jit.store64(
+        TrustedImm32(JSValue::CellTag), operandGPR, scratch3.gpr(), JITCompiler::Address(resultGPR, JSWrapperObject::internalValueOffset()));
 #endif
-    
+
+
     m_jit.mutatorFence(vm());
     
     addSlowPathGenerator(slowPathCall(

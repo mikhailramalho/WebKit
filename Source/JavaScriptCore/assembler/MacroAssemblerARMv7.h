@@ -902,6 +902,50 @@ public:
         loadPair32(Address(scratch, address.offset), dest1, dest2);
     }
 
+    void store64(TrustedImm32 imm, RegisterID src, RegisterID tempRegister, Address address)
+    {
+        // ldrexd doesnt't take offsets
+        RegisterID base = address.base;
+        int32_t offset = address.offset;
+        add32(TrustedImm32(offset), base, addressTempRegister);
+
+        Label loop = label();
+        m_assembler.ldrexd(tempRegister, dataTempRegister, addressTempRegister);
+
+        move(imm, tempRegister);
+        m_assembler.strexd(src, tempRegister, addressTempRegister, dataTempRegister);
+        branchTest32(NonZero, dataTempRegister).linkTo(loop, this);
+    }
+
+    void store64(TrustedImm32 imm1, TrustedImm32 imm2, RegisterID tempRegister, Address address)
+    {
+        // ldrexd doesnt't take offsets
+        RegisterID base = address.base;
+        int32_t offset = address.offset;
+        add32(TrustedImm32(offset), base, addressTempRegister);
+        move(imm2, base);
+
+        Label loop = label();
+        m_assembler.ldrexd(tempRegister, dataTempRegister, addressTempRegister);
+
+        move(imm1, tempRegister);
+        m_assembler.strexd(base, tempRegister, addressTempRegister, dataTempRegister);
+        branchTest32(NonZero, dataTempRegister).linkTo(loop, this);
+        sub32(addressTempRegister, TrustedImm32(offset), base);
+    }
+
+    void store64(TrustedImm32 imm1, RegisterID src, RegisterID tempRegister, const void* address)
+    {
+        move(TrustedImmPtr(address), addressTempRegister);
+
+        Label loop = label();
+        m_assembler.ldrexd(tempRegister, dataTempRegister, addressTempRegister);
+
+        move(imm1, tempRegister);
+        m_assembler.strexd(src, tempRegister, addressTempRegister, dataTempRegister);
+        branchTest32(NonZero, dataTempRegister).linkTo(loop, this);
+    }
+
     void store32(RegisterID src, Address address)
     {
         store32(src, setupArmAddress(address));
