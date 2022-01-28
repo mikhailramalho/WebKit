@@ -693,6 +693,7 @@ private:
         OP_NOP_T2b       = 0x8000,
         OP_DMB_SY_T1b    = 0x8F5F,
         OP_DMB_ISHST_T1b = 0x8F5A,
+        OP_DMB_ISH_T1b   = 0x8F5B,
         OP_B_T3b         = 0x8000,
         OP_B_T4b         = 0x9000,
     } OpcodeID2;
@@ -2141,6 +2142,11 @@ public:
     void dmbISHST()
     {
         m_formatter.twoWordOp16Op16(OP_DMB_T1a, OP_DMB_ISHST_T1b);
+    }
+
+    void dmbISH()
+    {
+        m_formatter.twoWordOp16Op16(OP_DMB_T1a, OP_DMB_ISH_T1b);
     }
 
     AssemblerLabel labelIgnoringWatchpoints()
