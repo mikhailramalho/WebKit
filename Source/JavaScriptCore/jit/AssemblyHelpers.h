@@ -151,8 +151,8 @@ public:
 #endif
     }
 
-    template<typename U>
-    void storeCell(JSValueRegs regs, U address)
+    template<typename T>
+    void storeCell(JSValueRegs regs, T address)
     {
 #if USE(JSVALUE64)
         store64(regs.gpr(), address);
@@ -166,12 +166,7 @@ public:
 #if USE(JSVALUE32_64)
     void storeCell(const void* address)
     {
-#if ENABLE(CONCURRENT_JS)
-        if (Options::useConcurrentJIT()) {
-            store32Concurrently(AssemblyHelpers::TrustedImm32(JSValue::CellTag), address);
-            return;
-        }
-#endif
+        static_assert(!PayloadOffset && TagOffset == 4, "Assumes little-endian system");
         store32(AssemblyHelpers::TrustedImm32(JSValue::CellTag), address);
     }
 #endif
@@ -185,27 +180,8 @@ public:
 #endif
     }
 
-    void storeValue(JSValueRegs regs, Address address)
-    {
-#if USE(JSVALUE64)
-        store64(regs.gpr(), address);
-#else
-        static_assert(!PayloadOffset && TagOffset == 4, "Assumes little-endian system");
-        storePair32(regs.payloadGPR(), regs.tagGPR(), address);
-#endif
-    }
-    
-    void storeValue(JSValueRegs regs, BaseIndex address)
-    {
-#if USE(JSVALUE64)
-        store64(regs.gpr(), address);
-#else
-        static_assert(!PayloadOffset && TagOffset == 4, "Assumes little-endian system");
-        storePair32(regs.payloadGPR(), regs.tagGPR(), address);
-#endif
-    }
-    
-    void storeValue(JSValueRegs regs, void* address)
+    template<typename T>
+    void storeValue(JSValueRegs regs, T address)
     {
 #if USE(JSVALUE64)
         store64(regs.gpr(), address);
@@ -215,17 +191,8 @@ public:
 #endif
     }
 
-    void loadValue(Address address, JSValueRegs regs)
-    {
-#if USE(JSVALUE64)
-        load64(address, regs.gpr());
-#else
-        static_assert(!PayloadOffset && TagOffset == 4, "Assumes little-endian system");
-        loadPair32(address, regs.payloadGPR(), regs.tagGPR());
-#endif
-    }
-    
-    void loadValue(BaseIndex address, JSValueRegs regs)
+    template<typename T>
+    void loadValue(T address, JSValueRegs regs)
     {
 #if USE(JSVALUE64)
         load64(address, regs.gpr());
@@ -235,15 +202,6 @@ public:
 #endif
     }
 
-    void loadValue(void* address, JSValueRegs regs)
-    {
-#if USE(JSVALUE64)
-        load64(address, regs.gpr());
-#else
-        loadPair32(AbsoluteAddress(address), regs.payloadGPR(), regs.tagGPR());
-#endif
-    }
-    
     // Note that these clobber offset.
     void loadProperty(GPRReg object, GPRReg offset, JSValueRegs result);
     void storeProperty(JSValueRegs value, GPRReg object, GPRReg offset, GPRReg scratch);
@@ -287,7 +245,8 @@ public:
 #endif
     }
 
-    void storeValue(JSValue value, Address address, JSValueRegs tmpJSR)
+    template<typename T>
+    void storeValue(JSValue value, T address, JSValueRegs tmpJSR)
     {
 #if USE(JSVALUE64)
         UNUSED_PARAM(tmpJSR);
@@ -298,15 +257,6 @@ public:
         storeValue(tmpJSR, address);
 #endif
     }
-
-#if USE(JSVALUE32_64)
-    void storeValue(JSValue value, void* address, JSValueRegs tmpJSR)
-    {
-        // Can implement this without the tmpJSR, but using it yields denser code.
-        moveValue(value, tmpJSR);
-        storeValue(tmpJSR, address);
-    }
-#endif
 
     void storeTrustedValue(JSValue value, Address address)
     {
