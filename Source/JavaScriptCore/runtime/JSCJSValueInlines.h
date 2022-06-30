@@ -40,9 +40,11 @@
 #include "MathCommon.h"
 #include <wtf/text/StringImpl.h>
 
+#include <unordered_set>
+
 namespace JSC {
 
-static WTF::Vector<int32_t> cellPayloads;
+static std::unordered_set<int32_t> cellPayloads;
 
 ALWAYS_INLINE int32_t JSValue::toInt32(JSGlobalObject* globalObject) const
 {
@@ -358,12 +360,12 @@ inline bool JSValue::isUndefinedOrNull() const
 
 inline bool JSValue::isCell() const
 {
+    auto const maybeCell = (tag() == CellTag);
     // If we accessing a cell from a compilation thread, we'll store it and check if
     // they are still alive at the end of the compilation
-    if(isCompilationThread())
-        cellPayloads.append(payload());
-
-    return tag() == CellTag;
+    if(isCompilationThread() && maybeCell)
+        cellPayloads.insert(u.asBits.payload);
+    return maybeCell;
 }
 
 inline bool JSValue::isInt32() const
