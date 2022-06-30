@@ -42,6 +42,8 @@
 
 namespace JSC {
 
+static WTF::Vector<int32_t> cellPayloads;
+
 ALWAYS_INLINE int32_t JSValue::toInt32(JSGlobalObject* globalObject) const
 {
     if (isInt32())
@@ -356,6 +358,11 @@ inline bool JSValue::isUndefinedOrNull() const
 
 inline bool JSValue::isCell() const
 {
+    // If we accessing a cell from a compilation thread, we'll store it and check if
+    // they are still alive at the end of the compilation
+    if(isCompilationThread())
+        cellPayloads.append(payload());
+
     return tag() == CellTag;
 }
 

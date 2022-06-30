@@ -191,6 +191,14 @@ void JITPlan::compileInThread(JITWorklistThread* thread)
                 totalDFGCompileTime += after - before;
         }
     }
+
+    for(auto &cellPayload : cellPayloads)
+    {
+        JSCell* cell = reinterpret_cast<JSCell*>(cellPayload);
+        if(!cell->isLive())
+            dataLog("cell ", cellPayload, " is dead!");
+    }
+
     const char* pathName = nullptr;
     switch (path) {
     case FailPath:
