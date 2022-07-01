@@ -363,8 +363,12 @@ inline bool JSValue::isCell() const
     auto const maybeCell = (tag() == CellTag);
     // If we accessing a cell from a compilation thread, we'll store it and check if
     // they are still alive at the end of the compilation
+    static std::mutex m;
     if(isCompilationThread() && maybeCell)
+    {
+        std::scoped_lock<std::mutex> lk(m);
         cellPayloads.insert(u.asBits.payload);
+    }
     return maybeCell;
 }
 
