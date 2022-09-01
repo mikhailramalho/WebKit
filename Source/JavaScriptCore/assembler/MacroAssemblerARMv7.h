@@ -981,6 +981,11 @@ public:
         loadPair32(Address(scratch, address.offset), dest1, dest2);
     }
 
+    void loadPair32(const void* address, RegisterID dest1, RegisterID dest2)
+    {
+        loadPair32(setupArmAddress(AbsoluteAddress(address)), dest1, dest2);
+    }
+
     void loadPair64(RegisterID src, TrustedImm32 offset, FPRegisterID dest1, FPRegisterID dest2)
     {
         ASSERT(dest1 != dest2);
