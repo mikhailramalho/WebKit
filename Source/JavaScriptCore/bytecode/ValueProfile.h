@@ -134,14 +134,16 @@ struct ValueProfileBase {
             JSValue value = JSValue::decode(m_buckets[i]);
             if (!value)
                 continue;
-            
+
+            if (value.isCell() && !isLiveConcurrently(value.asCell()))
+                return SpecNone;
+
             mergeSpeculation(merged, speculationFromValue(value));
-            
+
             m_buckets[i] = JSValue::encode(JSValue());
         }
 
         mergeSpeculation(m_prediction, merged);
-        
         return m_prediction;
     }
 
