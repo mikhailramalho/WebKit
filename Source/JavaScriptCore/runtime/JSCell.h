@@ -301,4 +301,10 @@ inline auto subspaceForConcurrently(VM& vm)
 JS_EXPORT_PRIVATE NEVER_INLINE NO_RETURN_DUE_TO_CRASH NOT_TAIL_CALLED void reportZappedCellAndCrash(Heap&, const JSCell*);
 #endif
 
+#if USE(JSVALUE32_64)
+    bool isLiveConcurrently(JSCell* cell);
+#else
+    constexpr bool isLiveConcurrently(JSCell*) { return true; }
+#endif
+
 } // namespace JSC

@@ -101,12 +101,6 @@ inline bool mayHaveIndexingHeader(HeapCell::Kind kind)
     return kind == HeapCell::Auxiliary || kind == HeapCell::JSCellWithIndexingHeader;
 }
 
-#if USE(JSVALUE32_64)
-    bool isLiveConcurrently(HeapCell* cell);
-#else
-    constexpr bool isLiveConcurrently(HeapCell*) { return true; }
-#endif
-
 } // namespace JSC
 
 namespace WTF {

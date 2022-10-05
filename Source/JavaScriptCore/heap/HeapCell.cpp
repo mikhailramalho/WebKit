@@ -41,14 +41,6 @@ bool HeapCell::isLive()
         return !markedBlockHandle.isFreeListedCell(this);
     return markedBlockHandle.isLive(this);
 }
-
-#if USE(JSVALUE32_64)
-bool isLiveConcurrently(HeapCell* cell)
-{
-    return cell->isLive();
-}
-#endif
-
 } // namespace JSC
 
 namespace WTF {

@@ -338,4 +338,21 @@ NEVER_INLINE NO_RETURN_DUE_TO_CRASH NOT_TAIL_CALLED void reportZappedCellAndCras
 }
 #endif // CPU(X86_64)
 
+#if USE(JSVALUE32_64)
+bool isLiveConcurrently(JSCell* cell)
+{
+    if (!isCompilationThread())
+        return true;
+
+    if (!Options::useConcurrentJIT())
+        return true;
+
+    Structure* structure = cell->structure();
+    structure->lock().lock();
+    bool isLive = cell->isLive();
+    structure->lock().unlock();
+    return isLive;
+}
+#endif
+
 } // namespace JSC
