@@ -331,4 +331,29 @@ NEVER_INLINE NO_RETURN_DUE_TO_CRASH NOT_TAIL_CALLED void reportZappedCellAndCras
 }
 #endif // CPU(X86_64)
 
+#if USE(JSVALUE32_64)
+bool isLiveConcurrently(JSCell* cell)
+{
+    if (!isCompilationThread() || !Options::useConcurrentJIT())
+        return true;
+
+    if (!cell)
+        return false;
+
+    {
+        auto& checker = CellAddressChecker::instance();
+        if (!checker.isValidCell(cell))
+            return false;
+    }
+
+    if (cell->isPreciseAllocation())
+        return cell->preciseAllocation().isLive();
+
+    MarkedBlock& markedBlock = cell->markedBlock();
+    if (!markedBlock.handle().isFreeListed())
+        return markedBlock.handle().isLive(cell);
+    return !cell->isZapped();
+}
+#endif
+
 } // namespace JSC
