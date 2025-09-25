@@ -325,8 +325,7 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::setGlobal(uint32_t index, Value value)
 
         Location valueLocation;
         if (value.isConst() && value.isFloat()) {
-            ScratchScope<0, 1> scratches(*this);
-            valueLocation = Location::fromFPR(scratches.fpr(0));
+            valueLocation = Location::fromFPR(wasmScratchFPR);
             emitMoveConst(value, valueLocation);
         } else if (value.isConst()) {
             if (typeNeedsGPR2(value.type())) {
@@ -480,12 +479,10 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::load(LoadOpType loadOp, Value pointer, 
                 m_jit.loadPair32(location, resultLocation.asGPRlo(), resultLocation.asGPRhi());
                 break;
             case LoadOpType::F32Load:
-                m_jit.load32(location, wasmScratchGPR);
-                m_jit.move32ToFloat(wasmScratchGPR, resultLocation.asFPR());
+                m_jit.loadFloat(location, resultLocation.asFPR());
                 break;
             case LoadOpType::F64Load:
-                m_jit.loadPair32(location, wasmScratchGPR, wasmScratchGPR2);
-                m_jit.move64ToDouble(wasmScratchGPR2, wasmScratchGPR, resultLocation.asFPR());
+                m_jit.loadDouble(location, resultLocation.asFPR());
                 break;
             }
 
@@ -510,8 +507,7 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::store(StoreOpType storeOp, Value pointe
         emitCheckAndPrepareAndMaterializePointerApply(pointer, uoffset, sizeOfStoreOp(storeOp), [&](auto location) -> void {
             Location valueLocation;
             if (value.isConst() && value.isFloat()) {
-                ScratchScope<0, 1> scratches(*this);
-                valueLocation = Location::fromFPR(scratches.fpr(0));
+                valueLocation = Location::fromFPR(wasmScratchFPR);
                 emitMoveConst(value, valueLocation);
             } else if (value.isConst() && typeNeedsGPR2(value.type())) {
                 ScratchScope<2, 0> scratches(*this);
@@ -550,18 +546,12 @@ PartialResult WARN_UNUSED_RETURN BBQJIT::store(StoreOpType storeOp, Value pointe
             case StoreOpType::I64Store:
                 m_jit.storePair32(valueLocation.asGPRlo(), valueLocation.asGPRhi(), location);
                 return;
-            case StoreOpType::F32Store: {
-                ScratchScope<1, 0> scratches(*this);
-                m_jit.moveFloatTo32(valueLocation.asFPR(), scratches.gpr(0));
-                m_jit.store32(scratches.gpr(0), location);
+            case StoreOpType::F32Store:
+                m_jit.storeFloat(valueLocation.asFPR(), location);
                 return;
-            }
-            case StoreOpType::F64Store: {
-                ScratchScope<1, 0> scratches(*this);
-                m_jit.moveDoubleTo64(valueLocation.asFPR(), wasmScratchGPR2, scratches.gpr(0));
-                m_jit.storePair32(scratches.gpr(0), wasmScratchGPR2, location);
+            case StoreOpType::F64Store:
+                m_jit.storeDouble(valueLocation.asFPR(), location);
                 return;
-            }
             }
         });
     }
@@ -1540,13 +1530,11 @@ void BBQJIT::emitArraySetUnchecked(uint32_t typeIndex, Value arrayref, Value ind
     auto payloadGPR = tmp.gpr(0);
     emitArrayGetPayload(elementType, arrayLocation.asGPRlo(), payloadGPR);
     if (index.isConst()) {
-        ScratchScope<1, 0> scratches(*this);
         auto fieldAddress = MacroAssembler::Address(payloadGPR, elementType.elementSize() * index.asI32());
 
         Location valueLocation;
         if (value.isConst() && value.isFloat()) {
-            ScratchScope<0, 1> scratches(*this);
-            valueLocation = Location::fromFPR(scratches.fpr(0));
+            valueLocation = Location::fromFPR(wasmScratchFPR);
             // Materialize the constant to ensure constant blinding.
             emitMoveConst(value, valueLocation);
         } else if (value.isConst() && typeNeedsGPR2(value.type())) {
@@ -1599,8 +1587,7 @@ void BBQJIT::emitArraySetUnchecked(uint32_t typeIndex, Value arrayref, Value ind
 
         Location valueLocation;
         if (value.isConst() && value.isFloat()) {
-            ScratchScope<0, 1> scratches(*this);
-            valueLocation = Location::fromFPR(scratches.fpr(0));
+            valueLocation = Location::fromFPR(wasmScratchFPR);
             emitMoveConst(value, valueLocation);
         } else if (value.isConst() && typeNeedsGPR2(value.type())) {
             ScratchScope<2, 0> scratches(*this);

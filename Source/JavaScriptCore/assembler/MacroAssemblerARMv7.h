@@ -51,7 +51,8 @@ public:
     // temporary, and in particular as Wasm argument/return register.
     static constexpr ARMRegisters::FPDoubleRegisterID fpTempRegister = ARMRegisters::d15;
 private:
-    inline ARMRegisters::FPSingleRegisterID fpTempRegisterAsSingle() { return ARMRegisters::asSingle(fpTempRegister); }
+    using FPSingleRegisterID = ARMRegisters::FPSingleRegisterID;
+    inline FPSingleRegisterID fpTempRegisterAsSingle() { return ARMRegisters::asSingle(fpTempRegister); }
 
     // In the Thumb-2 instruction set, instructions operating only on registers r0-r7 can often
     // be encoded using 16-bit encodings, while the use of registers r8 and above often require
@@ -1503,9 +1504,19 @@ public:
         m_assembler.vmov(asSingle(dest), src);
     }
 
+    void move32ToFloat(RegisterID src, FPSingleRegisterID dest)
+    {
+        m_assembler.vmov(dest, src);
+    }
+
     void moveFloatTo32(FPRegisterID src, RegisterID dest)
     {
         m_assembler.vmov(dest, asSingle(src));
+    }
+
+    void moveFloatTo32(FPSingleRegisterID src, RegisterID dest)
+    {
+        m_assembler.vmov(dest, src);
     }
 
     void move64ToDouble(RegisterID srcHi, RegisterID srcLo, FPRegisterID dest)
@@ -1585,34 +1596,19 @@ public:
 
     void loadDouble(Address address, FPRegisterID dest)
     {
-        RegisterID base = address.base;
-        int32_t offset = address.offset;
-
-        // Arm vfp addresses can be offset by a 9-bit ones-comp immediate, left shifted by 2.
-        if ((offset & 3) || (offset > (255 * 4)) || (offset < -(255 * 4))) {
-            RegisterID scratch = getCachedAddressTempRegisterIDAndInvalidate();
-            add32(TrustedImm32(offset), base, scratch);
-            base = scratch;
-            offset = 0;
-        }
-        
-        m_assembler.vldr(dest, base, offset);
+        loadFloat(address, asSingle(dest));
+        loadFloat(address.withOffset(4), asSingleUpper(dest));
     }
 
     void loadFloat(Address address, FPRegisterID dest)
     {
-        RegisterID base = address.base;
-        int32_t offset = address.offset;
+        loadFloat(address, asSingle(dest));
+    }
 
-        // Arm vfp addresses can be offset by a 9-bit ones-comp immediate, left shifted by 2.
-        if ((offset & 3) || (offset > (255 * 4)) || (offset < -(255 * 4))) {
-            RegisterID scratch = getCachedAddressTempRegisterIDAndInvalidate();
-            add32(TrustedImm32(offset), base, scratch);
-            base = scratch;
-            offset = 0;
-        }
-        
-        m_assembler.flds(ARMRegisters::asSingle(dest), base, offset);
+    void loadFloat(Address address, FPSingleRegisterID dest)
+    {
+        load32(address, dataTempRegister);
+        move32ToFloat(dataTempRegister, dest);
     }
 
     void loadDouble(BaseIndex address, FPRegisterID dest)
@@ -1623,7 +1619,7 @@ public:
         cachedAddressTempRegister().invalidate();
         loadDouble(Address(addressTempRegister, address.offset), dest);
     }
-    
+
     void loadFloat(BaseIndex address, FPRegisterID dest)
     {
         move(address.index, addressTempRegister);
@@ -1680,7 +1676,7 @@ public:
     void loadFloat(TrustedImmPtr address, FPRegisterID dest)
     {
         move(address, addressTempRegister);
-        m_assembler.flds(ARMRegisters::asSingle(dest), addressTempRegister, 0);
+        loadFloat(Address(addressTempRegister), dest);
     }
 
     void moveZeroToDouble(FPRegisterID reg)
@@ -1692,39 +1688,24 @@ public:
     void loadDouble(TrustedImmPtr address, FPRegisterID dest)
     {
         move(address, addressTempRegister);
-        m_assembler.vldr(dest, addressTempRegister, 0);
+        loadDouble(Address(addressTempRegister), dest);
     }
 
     void storeDouble(FPRegisterID src, Address address)
     {
-        RegisterID base = address.base;
-        int32_t offset = address.offset;
-
-        // Arm vfp addresses can be offset by a 9-bit ones-comp immediate, left shifted by 2.
-        if ((offset & 3) || (offset > (255 * 4)) || (offset < -(255 * 4))) {
-            RegisterID scratch = getCachedAddressTempRegisterIDAndInvalidate();
-            add32(TrustedImm32(offset), base, scratch);
-            base = scratch;
-            offset = 0;
-        }
-        
-        m_assembler.vstr(src, base, offset);
+        storeFloat(asSingle(src), address);
+        storeFloat(asSingleUpper(src), address.withOffset(4));
     }
 
     void storeFloat(FPRegisterID src, Address address)
     {
-        RegisterID base = address.base;
-        int32_t offset = address.offset;
+        storeFloat(asSingle(src), address);
+    }
 
-        // Arm vfp addresses can be offset by a 9-bit ones-comp immediate, left shifted by 2.
-        if ((offset & 3) || (offset > (255 * 4)) || (offset < -(255 * 4))) {
-            RegisterID scratch = getCachedAddressTempRegisterIDAndInvalidate();
-            add32(TrustedImm32(offset), base, scratch);
-            base = scratch;
-            offset = 0;
-        }
-        
-        m_assembler.fsts(ARMRegisters::asSingle(src), base, offset);
+    void storeFloat(FPSingleRegisterID src, Address address)
+    {
+        moveFloatTo32(src, dataTempRegister);
+        store32(dataTempRegister, address);
     }
 
     void storeDouble(FPRegisterID src, TrustedImmPtr address)
