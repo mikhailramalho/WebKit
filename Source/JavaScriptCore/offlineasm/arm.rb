@@ -88,7 +88,25 @@ end
 # cheaper to encode.
 ARM_EXTRA_GPRS = [SpecialRegister.new("r9"), SpecialRegister.new("lr"), SpecialRegister.new("r6")]
 ARM_SCRATCH_FPR = SpecialRegister.new("d7")
+ARM_MAX_REGISTERS_PER_PUSH = 8
 OS_DARWIN = ((RUBY_PLATFORM =~ /darwin/i) != nil)
+
+def armRegisterSortKey(operand)
+    name = operand.armOperand
+    case name
+    when /^r(\d+)$/
+        $1.to_i
+    when "sp"
+        13
+    when "lr"
+        14
+    when "pc"
+        15
+    else
+        origin = operand.respond_to?(:codeOriginString) ? operand.codeOriginString : "unknown"
+        raise "Unsupported register #{name} for ARM push/pop at #{origin}"
+    end
+end
 
 def armMoveImmediate(value, register)
     # Currently we only handle the simple cases, and fall back to mov/movt for the complex ones.
@@ -746,14 +764,18 @@ class Instruction
         when "moved"
             $asm.puts "vmov.f64 #{armFlippedOperands(operands)}"
         when "pop"
-            operands.each {
-                | op |
-                $asm.puts "pop { #{op.armOperand} }"
+            operands.each_slice(ARM_MAX_REGISTERS_PER_PUSH) {
+                | group |
+                next if group.empty?
+                register_list = group.sort_by { |op| armRegisterSortKey(op) }.map { |op| op.armOperand }.join(", ")
+                $asm.puts "pop { #{register_list} }"
             }
         when "push"
-            operands.each {
-                | op |
-                $asm.puts "push { #{op.armOperand} }"
+            operands.each_slice(ARM_MAX_REGISTERS_PER_PUSH) {
+                | group |
+                next if group.empty?
+                register_list = group.sort_by { |op| armRegisterSortKey(op) }.map { |op| op.armOperand }.join(", ")
+                $asm.puts "push { #{register_list} }"
             }
         when "move"
             if operands[0].immediate?
@@ -1011,4 +1033,3 @@ class Instruction
         end
     end
 end
-

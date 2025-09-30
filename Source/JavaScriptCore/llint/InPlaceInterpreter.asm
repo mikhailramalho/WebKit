@@ -814,7 +814,8 @@ if JSVALUE64
 else
     # Store old Callee to the stack temporarily
     loadp Callee[cfr], ws1
-    push ws1, ws1
+    push ws1
+    push ws1
     loadp WebAssemblyFunction::m_boxedJSToWasmCallee[ws0], ws1
     storep ws1, Callee[cfr]
 end

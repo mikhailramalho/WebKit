@@ -938,12 +938,12 @@ macro popCalleeSaves()
 end
 
 macro preserveCallerPCAndCFR()
-    if C_LOOP or ARMv7
+    if C_LOOP
         push lr
         push cfr
     elsif X86_64
         push cfr
-    elsif ARM64 or ARM64E or RISCV64
+    elsif ARM64 or ARM64E or RISCV64 or ARMv7
         push cfr, lr
     else
         error
@@ -953,12 +953,12 @@ end
 
 macro restoreCallerPCAndCFR()
     move cfr, sp
-    if C_LOOP or ARMv7
+    if C_LOOP
         pop cfr
         pop lr
     elsif X86_64
         pop cfr
-    elsif ARM64 or ARM64E or RISCV64
+    elsif ARM64 or ARM64E or RISCV64 or ARMv7
         pop lr, cfr
     end
 end
@@ -1184,9 +1184,9 @@ macro functionPrologue()
     tagReturnAddress sp
     if X86_64
         push cfr
-    elsif ARM64 or ARM64E or RISCV64
+    elsif ARM64 or ARM64E or RISCV64 or ARMv7
         push cfr, lr
-    elsif C_LOOP or ARMv7 
+    elsif C_LOOP
         push lr
         push cfr
     end
@@ -1196,9 +1196,9 @@ end
 macro functionEpilogue()
     if X86_64
         pop cfr
-    elsif ARM64 or ARM64E or RISCV64
+    elsif ARM64 or ARM64E or RISCV64 or ARMv7
         pop lr, cfr
-    elsif C_LOOP or ARMv7
+    elsif C_LOOP
         pop cfr
         pop lr
     end
@@ -1653,14 +1653,11 @@ macro prologue(osrSlowPath, traceSlowPath)
         btpz r0, .recover
         move cfr, sp # restore the previous sp
         # pop the callerFrame since we will jump to a function that wants to save it
-        if ARM64 or RISCV64
+        if ARM64 or RISCV64 or ARMv7
             pop lr, cfr
         elsif ARM64E
             # untagReturnAddress will be performed in Gate::entryOSREntry.
             pop lr, cfr
-        elsif ARMv7
-            pop cfr
-            pop lr
         else
             pop cfr
         end
