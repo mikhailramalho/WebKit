@@ -179,12 +179,11 @@ void WebAssemblyModuleRecord::initializeImports(JSGlobalObject* globalObject, JS
             defineImportedStringConstant(vm, m_instance, import);
             continue;
         }
-
-        JSValue value;
         const WebAssemblyBuiltinSet* builtinSet = findEnabledBuiltinSet(moduleNameString, moduleInformation);
+        const WebAssemblyBuiltin* builtin = nullptr;
         if (builtinSet) {
             String fieldName = makeString(import.field);
-            auto* builtin = builtinSet->findBuiltin(fieldName);
+            builtin = builtinSet->findBuiltin(fieldName);
             if (!builtin)
                 return exception(createTypeError(globalObject, importFailMessage(import, "import"_s, "is not a valid builtin reference"_s)));
 
@@ -192,69 +191,64 @@ void WebAssemblyModuleRecord::initializeImports(JSGlobalObject* globalObject, JS
                 initializeBuiltinImport(vm, m_instance, import, builtin);
                 continue;
             }
-
-            // FIXME: This is a temporary workaround to allow builtin imports on 32-bit platforms.
-            // It should be removed once we are able to hold a JSValue in a single register in 32-bit.
-            value = builtin->jsWrapper(globalObject);
         }
 
-        if (!value) {
-            Identifier fieldName = Identifier::fromString(vm, makeAtomString(import.field));
-            if (creationMode == Wasm::CreationMode::FromJS) {
-                // 1. Let o be the resultant value of performing Get(importObject, i.module_name).
-                JSValue importModuleValue = importObject->get(globalObject, moduleName);
-                RETURN_IF_EXCEPTION(scope, void());
-                // 2. If Type(o) is not Object, throw a TypeError.
-                if (!importModuleValue.isObject())
-                    return exception(createTypeError(globalObject, importFailMessage(import, "import"_s, "must be an object"_s), defaultSourceAppender, runtimeTypeForValue(importModuleValue)));
+        Identifier fieldName = Identifier::fromString(vm, makeAtomString(import.field));
+        JSValue value;
+        if (!builtin && creationMode == Wasm::CreationMode::FromJS) {
+            // 1. Let o be the resultant value of performing Get(importObject, i.module_name).
+            JSValue importModuleValue = importObject->get(globalObject, moduleName);
+            RETURN_IF_EXCEPTION(scope, void());
+            // 2. If Type(o) is not Object, throw a TypeError.
+            if (!importModuleValue.isObject())
+                return exception(createTypeError(globalObject, importFailMessage(import, "import"_s, "must be an object"_s), defaultSourceAppender, runtimeTypeForValue(importModuleValue)));
 
-                // 3. Let v be the value of performing Get(o, i.item_name)
-                JSObject* object = jsCast<JSObject*>(importModuleValue);
-                value = object->get(globalObject, fieldName);
-                RETURN_IF_EXCEPTION(scope, void());
-            } else {
-                AbstractModuleRecord* importedModule = hostResolveImportedModule(globalObject, moduleName);
-                RETURN_IF_EXCEPTION(scope, void());
-                Resolution resolution = importedModule->resolveExport(globalObject, fieldName);
-                RETURN_IF_EXCEPTION(scope, void());
-                switch (resolution.type) {
-                case Resolution::Type::NotFound:
-                    throwSyntaxError(globalObject, scope, makeString("Importing binding name '"_s, StringView(fieldName.impl()), "' is not found."_s));
-                    return;
+            // 3. Let v be the value of performing Get(o, i.item_name)
+            JSObject* object = jsCast<JSObject*>(importModuleValue);
+            value = object->get(globalObject, fieldName);
+            RETURN_IF_EXCEPTION(scope, void());
+        } else if (!builtin) {
+            AbstractModuleRecord* importedModule = hostResolveImportedModule(globalObject, moduleName);
+            RETURN_IF_EXCEPTION(scope, void());
+            Resolution resolution = importedModule->resolveExport(globalObject, fieldName);
+            RETURN_IF_EXCEPTION(scope, void());
+            switch (resolution.type) {
+            case Resolution::Type::NotFound:
+                throwSyntaxError(globalObject, scope, makeString("Importing binding name '"_s, StringView(fieldName.impl()), "' is not found."_s));
+                return;
 
-                case Resolution::Type::Ambiguous:
-                    throwSyntaxError(globalObject, scope, makeString("Importing binding name '"_s, StringView(fieldName.impl()), "' cannot be resolved due to ambiguous multiple bindings."_s));
-                    return;
+            case Resolution::Type::Ambiguous:
+                throwSyntaxError(globalObject, scope, makeString("Importing binding name '"_s, StringView(fieldName.impl()), "' cannot be resolved due to ambiguous multiple bindings."_s));
+                return;
 
-                case Resolution::Type::Error:
-                    throwSyntaxError(globalObject, scope, "Importing binding name 'default' cannot be resolved by star export entries."_s);
-                    return;
+            case Resolution::Type::Error:
+                throwSyntaxError(globalObject, scope, "Importing binding name 'default' cannot be resolved by star export entries."_s);
+                return;
 
-                case Resolution::Type::Resolved:
-                    break;
-                }
+            case Resolution::Type::Resolved:
+                break;
+            }
 
-                AbstractModuleRecord* importedRecord = resolution.moduleRecord;
-                JSModuleEnvironment* importedEnvironment = importedRecord->moduleEnvironmentMayBeNull();
-                // It means that target module is not linked yet. In wasm loading, we allow this since we do not solve cyclic resolution as if JS's bindings.
-                // At that time, error occurs since |value| is an empty, and later |value| becomes an undefined.
-                // https://github.com/WebAssembly/esm-integration/tree/master/proposals/esm-integration#js---wasm-cycle-where-js-is-higher-in-the-module-graph
-                if (importedEnvironment) {
-                    SymbolTable* symbolTable = importedEnvironment->symbolTable();
-                    ConcurrentJSLocker locker(symbolTable->m_lock);
-                    auto iter = symbolTable->find(locker, resolution.localName.impl());
-                    ASSERT(iter != symbolTable->end(locker));
-                    SymbolTableEntry& entry = iter->value;
-                    ASSERT(!entry.isNull());
-                    ASSERT(importedEnvironment->isValidScopeOffset(entry.scopeOffset()));
+            AbstractModuleRecord* importedRecord = resolution.moduleRecord;
+            JSModuleEnvironment* importedEnvironment = importedRecord->moduleEnvironmentMayBeNull();
+            // It means that target module is not linked yet. In wasm loading, we allow this since we do not solve cyclic resolution as if JS's bindings.
+            // At that time, error occurs since |value| is an empty, and later |value| becomes an undefined.
+            // https://github.com/WebAssembly/esm-integration/tree/master/proposals/esm-integration#js---wasm-cycle-where-js-is-higher-in-the-module-graph
+            if (importedEnvironment) {
+                SymbolTable* symbolTable = importedEnvironment->symbolTable();
+                ConcurrentJSLocker locker(symbolTable->m_lock);
+                auto iter = symbolTable->find(locker, resolution.localName.impl());
+                ASSERT(iter != symbolTable->end(locker));
+                SymbolTableEntry& entry = iter->value;
+                ASSERT(!entry.isNull());
+                ASSERT(importedEnvironment->isValidScopeOffset(entry.scopeOffset()));
 
-                    // Snapshotting a value.
-                    value = importedEnvironment->variableAt(entry.scopeOffset()).get();
-                }
+                // Snapshotting a value.
+                value = importedEnvironment->variableAt(entry.scopeOffset()).get();
             }
         }
         if (!value)
-            value = jsUndefined();
+            value = builtin ? builtin->jsWrapper(globalObject) : jsUndefined();
 
         switch (import.kind) {
         case Wasm::ExternalKind::Function: {
