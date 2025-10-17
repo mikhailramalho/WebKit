@@ -377,6 +377,11 @@ public:
         m_assembler.clz(dest, dest);
     }
 
+    void lshift256(RegisterID src, RegisterID shiftAmount, RegisterID dest)
+    {
+        m_assembler.lsl(dest, src, shiftAmount);
+    }
+
     void lshift32(RegisterID src, RegisterID shiftAmount, RegisterID dest)
     {
         RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
@@ -579,6 +584,12 @@ public:
         m_assembler.sub(scratch, ARMThumbImmediate::makeUInt12(32), scratch);
         m_assembler.ror(dest, src, scratch);
     }
+
+    void rshift256(RegisterID src, RegisterID shiftAmount, RegisterID dest)
+    {
+        m_assembler.asr(dest, src, shiftAmount);
+    }
+
     void rshift32(RegisterID src, RegisterID shiftAmount, RegisterID dest)
     {
         RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
@@ -602,7 +613,7 @@ public:
     {
         rshift32(dest, shiftAmount, dest);
     }
-    
+
     void rshift32(TrustedImm32 imm, RegisterID dest)
     {
         rshift32(dest, imm, dest);
@@ -616,6 +627,11 @@ public:
         m_assembler.asr(dest, dataTempRegister, dest);
     }
 
+    void urshift256(RegisterID src, RegisterID shiftAmount, RegisterID dest)
+    {
+        m_assembler.lsr(dest, src, shiftAmount);
+    }
+
     void urshift32(RegisterID src, RegisterID shiftAmount, RegisterID dest)
     {
         RegisterID scratch = getCachedDataTempRegisterIDAndInvalidate();
@@ -623,10 +639,10 @@ public:
         ARMThumbImmediate armImm = ARMThumbImmediate::makeEncodedImm(0x1f);
         ASSERT(armImm.isValid());
         m_assembler.ARM_and(scratch, shiftAmount, armImm);
-        
+
         m_assembler.lsr(dest, src, scratch);
     }
-    
+
     void urshift32(RegisterID src, TrustedImm32 imm, RegisterID dest)
     {
         if (!(imm.m_value & 0x1f))
@@ -639,7 +655,7 @@ public:
     {
         urshift32(dest, shiftAmount, dest);
     }
-    
+
     void urshift32(TrustedImm32 imm, RegisterID dest)
     {
         urshift32(dest, imm, dest);
