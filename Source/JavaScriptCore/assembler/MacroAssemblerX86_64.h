@@ -7488,7 +7488,7 @@ public:
             m_assembler.vcmppd_rrr(PackedCompareCondition::Unordered, right, left, dest);
     }
 
-    void compareFloatingPointVector(DoubleCondition cond, SIMDInfo simdInfo, FPRegisterID left, FPRegisterID right, FPRegisterID dest, FPRegisterID scratch)
+    void compareFloatingPointVector(DoubleCondition cond, SIMDInfo simdInfo, FPRegisterID left, FPRegisterID right, FPRegisterID dest, FPRegisterID)
     {
         RELEASE_ASSERT(supportsAVX());
         RELEASE_ASSERT(scalarTypeIsFloatingPoint(simdInfo.lane));
@@ -8103,7 +8103,7 @@ public:
         }
     }
 
-    void vectorPmin(SIMDInfo simdInfo, FPRegisterID left, FPRegisterID right, FPRegisterID dest)
+    void vectorPmin(SIMDInfo simdInfo, FPRegisterID left, FPRegisterID right, FPRegisterID dest, FPRegisterID)
     {
         RELEASE_ASSERT(supportsAVX());
         ASSERT(scalarTypeIsFloatingPoint(simdInfo.lane));
@@ -8117,7 +8117,7 @@ public:
             m_assembler.vminpd_rrr(left, right, dest);
     }
 
-    void vectorPmax(SIMDInfo simdInfo, FPRegisterID left, FPRegisterID right, FPRegisterID dest)
+    void vectorPmax(SIMDInfo simdInfo, FPRegisterID left, FPRegisterID right, FPRegisterID dest, FPRegisterID)
     {
         RELEASE_ASSERT(supportsAVX());
         ASSERT(scalarTypeIsFloatingPoint(simdInfo.lane));
