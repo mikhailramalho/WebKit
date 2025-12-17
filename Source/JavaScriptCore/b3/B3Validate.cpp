@@ -490,6 +490,7 @@ public:
                 VALIDATE(value->child(0)->type() == pointerType(), ("At ", *value));
                 VALIDATE(value->type() == pointerType(), ("At ", *value));
                 break;
+#if ENABLE(WEBASSEMBLY_OMGJIT) || ENABLE(WEBASSEMBLY_BBQJIT)
             case VectorExtractLane:
                 VALIDATE(!value->kind().hasExtraBits(), ("At ", *value));
                 VALIDATE(value->numChildren() == 1, ("At ", *value));
@@ -757,7 +758,7 @@ public:
                     || (value->asSIMDValue()->simdLane() == SIMDLane::i64x2), ("At ", *value));
                 VALIDATE(value->asSIMDValue()->signMode() == SIMDSignMode::None, ("At ", *value));
                 break;
-
+#endif
             case CCall:
                 VALIDATE(!value->kind().hasExtraBits(), ("At ", *value));
                 VALIDATE(value->numChildren() >= 1, ("At ", *value));
@@ -892,6 +893,8 @@ public:
                 VALIDATE(value->type() == Void, ("At ", *value));
                 VALIDATE(valueOwner.get(value)->numSuccessors() == m_procedure.numEntrypoints(), ("At ", *value));
                 break;
+            default:
+                UNREACHABLE_FOR_PLATFORM();
             }
 
             VALIDATE(!(value->effects().writes && value->key()), ("At ", *value));

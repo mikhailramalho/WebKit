@@ -1202,7 +1202,7 @@ op(wasm_throw_from_fault_handler_trampoline_reg_instance, macro ()
 end)
 
 op(ipint_entry, macro()
-if WEBASSEMBLY and (ARM64 or ARM64E or X86_64 or ARMv7)
+if WEBASSEMBLY and (ARM64 or ARM64E or X86_64 or RISCV64 or ARMv7)
     preserveCallerPCAndCFR()
     saveIPIntRegisters()
     storep wasmInstance, CodeBlock[cfr]
@@ -1220,7 +1220,7 @@ else
 end
 end)
 
-if WEBASSEMBLY and (ARM64 or ARM64E or X86_64 or ARMv7)
+if WEBASSEMBLY and (ARM64 or ARM64E or X86_64 or RISCV64 or ARMv7)
 .ipint_entry_end_local:
     argumINTInitializeDefaultLocals()
     jmp .ipint_entry_end_local
@@ -1352,7 +1352,7 @@ end
 end)
 
 op(ipint_table_catch_entry, macro()
-if WEBASSEMBLY and (ARM64 or ARM64E or X86_64 or ARMv7)
+if WEBASSEMBLY and (ARM64 or ARM64E or X86_64 or RISCV64 or ARMv7)
     ipintCatchCommon()
 
     # push arguments but no ref: sp in a2, call normal operation
@@ -1530,7 +1530,7 @@ defineWasmBuiltinTrampoline(jsstring, compare, a2)
 # 5. Instruction implementation #
 #################################
 
-if JSVALUE64 and (ARM64 or ARM64E or X86_64)
+if JSVALUE64 and (ARM64 or ARM64E or X86_64 or RISCV64)
     include InPlaceInterpreter64
 elsif ARMv7
     include InPlaceInterpreter32_64

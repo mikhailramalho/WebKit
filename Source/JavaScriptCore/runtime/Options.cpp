@@ -794,7 +794,9 @@ void Options::notifyOptionsChanged()
     Options::useConcurrentGC() = false;
     Options::forceUnlinkedDFG() = false;
     Options::useWasmSIMD() = false;
+#if !CPU(RISCV64)
     Options::useWasmIPInt() = false;
+#endif
 #if !CPU(ARM_THUMB2)
     Options::useBBQJIT() = false;
 #endif

@@ -341,6 +341,15 @@ public:
         m_assembler.addInsn(dest, temp.memory(), dest);
     }
 
+    void add64(FPRegisterID left, FPRegisterID right, FPRegisterID dest)
+    {
+        auto temp = temps<Data, Memory>();
+        moveDoubleTo64(left, temp.data());
+        moveDoubleTo64(right, temp.memory());
+        m_assembler.addInsn(temp.data(), temp.data(), temp.memory());
+        move64ToDouble(temp.data(), dest);
+    }
+
     void add64(Address address, RegisterID dest)
     {
         auto temp = temps<Data, Memory>();
@@ -446,6 +455,24 @@ public:
     void sub64(RegisterID op1, TrustedImm64 imm, RegisterID dest)
     {
         add64(TrustedImm64(-imm.m_value), op1, dest);
+    }
+
+    void sub64(FPRegisterID left, FPRegisterID right, FPRegisterID dest)
+    {
+        // RISC-V doesn't have integer sub on FP registers, so move to GP, sub, move back
+        auto temp = temps<Data, Memory>();
+        moveDoubleTo64(left, temp.data());
+        moveDoubleTo64(right, temp.memory());
+        m_assembler.subInsn(temp.data(), temp.data(), temp.memory());
+        move64ToDouble(temp.data(), dest);
+    }
+
+    void add8(TrustedImm32 imm, Address address)
+    {
+        auto temp = temps<Data, Memory>();
+        load8(address, temp.memory());
+        add32(imm, temp.memory(), temp.data());
+        store8(temp.data(), address);
     }
 
     void mul32(RegisterID src, RegisterID dest)
@@ -1737,6 +1764,15 @@ public:
             resolution = resolveAddress(address, temp.memory());
             m_assembler.swInsn(resolution.base, temp.data(), Imm::S(resolution.offset));
         }
+    }
+
+    void or32(RegisterID src, Address dest)
+    {
+        auto temp = temps<Data, Memory>();
+        auto resolution = resolveAddress(dest, temp.memory());
+        m_assembler.lwInsn(temp.data(), resolution.base, Imm::I(resolution.offset));
+        m_assembler.orInsn(temp.data(), temp.data(), src);
+        m_assembler.swInsn(resolution.base, temp.data(), Imm::S(resolution.offset));
     }
 
     void or64(RegisterID src, RegisterID dest)
@@ -3596,6 +3632,23 @@ public:
         UNREACHABLE_FOR_PLATFORM();
     }
 
+    void convertUInt32ToFloat(RegisterID src, FPRegisterID dest)
+    {
+        m_assembler.fcvtInsn<RISCV64Assembler::FCVTType::S, RISCV64Assembler::FCVTType::WU>(dest, src);
+    }
+
+    void convertUInt32ToDouble(RegisterID src, FPRegisterID dest)
+    {
+        m_assembler.fcvtInsn<RISCV64Assembler::FCVTType::D, RISCV64Assembler::FCVTType::WU>(dest, src);
+    }
+
+    void convertUInt32ToDouble(TrustedImm32 imm, FPRegisterID dest)
+    {
+        auto temp = temps<Data>();
+        loadImmediate(imm, temp.data());
+        convertUInt32ToDouble(temp.data(), dest);
+    }
+
     void convertInt32ToFloat(RegisterID src, FPRegisterID dest)
     {
         m_assembler.fcvtInsn<RISCV64Assembler::FCVTType::S, RISCV64Assembler::FCVTType::W>(dest, src);
@@ -4369,20 +4422,20 @@ private:
         using IType = RISCV64Assembler::IImmediate;
         template<int32_t value>
         static IType I() { return IType::v<IType, value>(); }
-        template<typename T, typename = EnableIfInteger<T>>
+        template<typename T> requires (std::same_as<T, int32_t> || std::same_as<T, int64_t>)
         static IType I(T value) { return IType::v<IType>(value); }
         static IType I(uint32_t value) { return IType(value); }
 
         using SType = RISCV64Assembler::SImmediate;
         template<int32_t value>
         static SType S() { return SType::v<SType, value>(); }
-        template<typename T, typename = EnableIfInteger<T>>
+        template<typename T> requires (std::same_as<T, int32_t> || std::same_as<T, int64_t>)
         static SType S(T value) { return SType::v<SType>(value); }
 
         using BType = RISCV64Assembler::BImmediate;
         template<int32_t value>
         static BType B() { return BType::v<BType, value>(); }
-        template<typename T, typename = EnableIfInteger<T>>
+        template<typename T> requires (std::same_as<T, int32_t> || std::same_as<T, int64_t>)
         static BType B(T value) { return BType::v<BType>(value); }
         static BType B(uint32_t value) { return BType(value); }
 
@@ -4712,9 +4765,7 @@ private:
     void testFinalize(ResultCondition cond, RegisterID src, RegisterID dest)
     {
         switch (cond) {
-        case Overflow:
-        case Signed:
-        case PositiveOrZero:
+        default:
             // None of the above should be used for testing operations.
             RELEASE_ASSERT_NOT_REACHED();
             break;

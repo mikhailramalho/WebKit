@@ -97,7 +97,7 @@
 # f30 => scratch register
 # f31 => scratch register
 
-RISCV64_EXTRA_GPRS = [SpecialRegister.new("x28"), SpecialRegister.new("x29"), SpecialRegister.new("x30"), SpecialRegister.new("x31")]
+RISCV64_EXTRA_GPRS = [SpecialRegister.new("x3"), SpecialRegister.new("x4"), SpecialRegister.new("x5")]
 RISCV64_EXTRA_FPRS = [SpecialRegister.new("f28"), SpecialRegister.new("f29"), SpecialRegister.new("f30"), SpecialRegister.new("f31")]
 
 
@@ -170,6 +170,14 @@ class RegisterID
             'x16'
         when 't7', 'a7', 'wa7'
             'x17'
+        when 't9'
+            'x28'
+        when 't10'
+            'x29'
+        when 't11'
+            'x30'
+        when 't12'
+            'x31'
         when 'ws0'
             'x6'
         when 'ws1'
@@ -223,6 +231,10 @@ class FPRegisterID
             'f4'
         when 'ft5'
             'f5'
+        when 'ft6'
+            'f6'
+        when 'ft7'
+            'f7'
         when 'csfr0'
             'f8'
         when 'csfr1'
@@ -266,6 +278,93 @@ class FPRegisterID
         else
             raise "Bad register name #{@name} at #{codeOriginString}"
         end
+    end
+    
+    # Map FP register names to RVV vector register names
+    def riscv64VectorOperand
+        case @name
+        when 'ft0'
+            'v0'
+        when 'ft1'
+            'v1'
+        when 'ft2'
+            'v2'
+        when 'ft3'
+            'v3'
+        when 'ft4'
+            'v4'
+        when 'ft5'
+            'v5'
+        when 'ft6'
+            'v6'
+        when 'ft7'
+            'v7'
+        when 'csfr0'
+            'v8'
+        when 'csfr1'
+            'v9'
+        when 'fa0', 'wfa0'
+            'v10'
+        when 'fa1', 'wfa1'
+            'v11'
+        when 'fa2', 'wfa2'
+            'v12'
+        when 'fa3', 'wfa3'
+            'v13'
+        when 'fa4', 'wfa4'
+            'v14'
+        when 'fa5', 'wfa5'
+            'v15'
+        when 'fa6', 'wfa6'
+            'v16'
+        when 'fa7', 'wfa7'
+            'v17'
+        when 'csfr2'
+            'v18'
+        when 'csfr3'
+            'v19'
+        when 'csfr4'
+            'v20'
+        when 'csfr5'
+            'v21'
+        when 'csfr6'
+            'v22'
+        when 'csfr7'
+            'v23'
+        when 'csfr8'
+            'v24'
+        when 'csfr9'
+            'v25'
+        when 'csfr10'
+            'v26'
+        when 'csfr11'
+            'v27'
+        else
+            raise "Bad FP register name for vector operation #{@name} at #{codeOriginString}"
+        end
+    end
+end
+
+class VecRegisterID
+    def riscv64Operand
+        # Map vector registers to RISC-V V extension vector registers (v0-v31)
+        # Similar to ARM64, we handle vN and vN_suffix patterns
+        case @name
+        when /^v(\d+)$/
+            # Simple vector register: v0, v1, v2, etc.
+            "v#{$1}"
+        when /^v(\d+)_(b|h|i|q)$/
+            # Vector register with element size suffix
+            # For RVV, we just use the base register name (element size handled by vsetvli)
+            "v#{$1}"
+        else
+            raise "Bad vector register name #{@name} at #{codeOriginString}"
+        end
+    end
+    
+    # For RVV instructions, VecRegisterID already outputs vector names
+    def riscv64VectorOperand
+        riscv64Operand
     end
 end
 
@@ -790,6 +889,10 @@ def riscv64LowerOperation(list)
             newList << Instruction.new(node.codeOrigin, "rv_slli", [source, Immediate.new(node.codeOrigin, 56), dest])
             newList << Instruction.new(node.codeOrigin, "rv_srai", [dest, Immediate.new(node.codeOrigin, 24), dest])
             newList << Instruction.new(node.codeOrigin, "rv_srli", [dest, Immediate.new(node.codeOrigin, 32), dest])
+        when [:b, :p]
+            # byte to pointer (64-bit) - same as b2q
+            newList << Instruction.new(node.codeOrigin, "rv_slli", [source, Immediate.new(node.codeOrigin, 56), dest])
+            newList << Instruction.new(node.codeOrigin, "rv_srai", [dest, Immediate.new(node.codeOrigin, 56), dest])
         when [:b, :q]
             newList << Instruction.new(node.codeOrigin, "rv_slli", [source, Immediate.new(node.codeOrigin, 56), dest])
             newList << Instruction.new(node.codeOrigin, "rv_srai", [dest, Immediate.new(node.codeOrigin, 56), dest])
@@ -797,11 +900,21 @@ def riscv64LowerOperation(list)
             newList << Instruction.new(node.codeOrigin, "rv_slli", [source, Immediate.new(node.codeOrigin, 48), dest])
             newList << Instruction.new(node.codeOrigin, "rv_srai", [dest, Immediate.new(node.codeOrigin, 16), dest])
             newList << Instruction.new(node.codeOrigin, "rv_srli", [dest, Immediate.new(node.codeOrigin, 32), dest])
+        when [:h, :p]
+            # half to pointer (64-bit) - same as h2q
+            newList << Instruction.new(node.codeOrigin, "rv_slli", [source, Immediate.new(node.codeOrigin, 48), dest])
+            newList << Instruction.new(node.codeOrigin, "rv_srai", [dest, Immediate.new(node.codeOrigin, 48), dest])
         when [:h, :q]
             newList << Instruction.new(node.codeOrigin, "rv_slli", [source, Immediate.new(node.codeOrigin, 48), dest])
             newList << Instruction.new(node.codeOrigin, "rv_srai", [dest, Immediate.new(node.codeOrigin, 48), dest])
+        when [:i, :p], [:i, :q]
+            # int to pointer/quad - sign extend from 32 to 64
+            newList << Instruction.new(node.codeOrigin, "rv_sext_w", [source, dest])
+        when [:p, :q]
+            # pointer to quad - noop on 64-bit
+            newList << Instruction.new(node.codeOrigin, "rv_mv", [source, dest]) if source != dest
         else
-            raise "Invalid bit-extension combination"
+            raise "Invalid bit-extension combination: #{[extension, fromSize, toSize].inspect}"
         end
     end
 
@@ -848,10 +961,10 @@ def riscv64LowerOperation(list)
         | node |
         if node.is_a? Instruction
             case node.opcode
-            when /^load(b|bsi|bsq|h||hsi|hsq|i|is|p|q)$/
-                emitLoadOperation(newList, node, $1.to_sym)
-            when /^store(b|h|i|p|q)$/
-                emitStoreOperation(newList, node, $1.to_sym)
+            when /^(atomic)?load(b|bsi|bsq|h|hsi|hsq|i|is|p|q)$/
+                emitLoadOperation(newList, node, $2.to_sym)
+            when /^(atomic)?store(b|h|i|p|q)$/
+                emitStoreOperation(newList, node, $2.to_sym)
             when "move"
                 emitMove(newList, node)
             when "jmp"
@@ -862,6 +975,34 @@ def riscv64LowerOperation(list)
                 emitPush(newList, node)
             when "pop"
                 emitPop(newList, node)
+            when "pushv"
+                # Push 128-bit vector value onto stack using RVV
+                node.operands.each {
+                    | op |
+                    sp = RegisterID.forName(node.codeOrigin, 'sp')
+                    # Allocate 16 bytes on stack
+                    newList << Instruction.new(node.codeOrigin, "rv_addi", [sp, Immediate.new(node.codeOrigin, -16), sp])
+                    # Set vector length for 128 bits: vsetvli rd, x0, vtypei
+                    tmp = RISCV64_EXTRA_GPRS[0]
+                    zero = SpecialRegister.new("x0")
+                    newList << Instruction.new(node.codeOrigin, "rv_vsetvli", [tmp, zero, Immediate.new(node.codeOrigin, 0b011_000)])
+                    # Store vector to stack: vse64.v vX, (sp)
+                    newList << Instruction.new(node.codeOrigin, "rv_vse64_v", [op, Address.new(node.codeOrigin, sp, Immediate.new(node.codeOrigin, 0))])
+                }
+            when "popv"
+                # Pop 128-bit vector value from stack using RVV
+                node.operands.each {
+                    | op |
+                    sp = RegisterID.forName(node.codeOrigin, 'sp')
+                    # Set vector length for 128 bits
+                    tmp = RISCV64_EXTRA_GPRS[0]
+                    zero = SpecialRegister.new("x0")
+                    newList << Instruction.new(node.codeOrigin, "rv_vsetvli", [tmp, zero, Immediate.new(node.codeOrigin, 0b011_000)])
+                    # Load vector from stack: vle64.v vX, (sp)
+                    newList << Instruction.new(node.codeOrigin, "rv_vle64_v", [Address.new(node.codeOrigin, sp, Immediate.new(node.codeOrigin, 0)), op])
+                    # Deallocate 16 bytes from stack
+                    newList << Instruction.new(node.codeOrigin, "rv_addi", [sp, Immediate.new(node.codeOrigin, 16), sp])
+                }
             when /^(add|sub)(i|p|q)$/
                 emitAdditionOperation(newList, node, $1.to_sym, $2.to_sym)
             when /^(mul|div|rem)(i|p|q)(s?)$/
@@ -1677,6 +1818,31 @@ class Instruction
         when /^rv_fsgn(n|x)?j\.(s|d)$/
             riscv64ValidateOperands(operands, [FPRegisterID, FPRegisterID, FPRegisterID])
             $asm.puts "#{rvop(opcode)} #{operands[2].riscv64Operand}, #{operands[0].riscv64Operand}, #{operands[1].riscv64Operand}"
+        when "transferp"
+            # transferp: transfer pointer-sized value from memory to memory
+            # operands[0] is source address, operands[1] is destination address
+            tmp = RISCV64_EXTRA_GPRS[0]
+            $asm.puts "ld #{tmp.riscv64Operand}, #{operands[0].riscv64Operand}"
+            $asm.puts "sd #{tmp.riscv64Operand}, #{operands[1].riscv64Operand}"
+        # V (Vector) instructions
+        when "rv_vsetvli"
+            # vsetvli rd, rs1, vtypei
+            # operands: [rd, rs1, vtypei]
+            # rd = destination for vl, rs1 = source for AVL (use x0 for max), vtypei = vtype immediate
+            riscv64ValidateOperands(operands, [RegisterID, SpecialRegister, Immediate], [RegisterID, RegisterID, Immediate])
+            $asm.puts "vsetvli #{operands[0].riscv64Operand}, #{operands[1].riscv64Operand}, #{operands[2].value}"
+        when "rv_vse64_v"
+            # vse64.v vs3, (rs1)
+            # operands: [vector_reg, address]
+            riscv64ValidateOperands(operands, [VecRegisterID, Address], [FPRegisterID, Address])
+            addr = operands[1]
+            $asm.puts "vse64.v #{operands[0].riscv64VectorOperand}, (#{addr.base.riscv64Operand})"
+        when "rv_vle64_v"
+            # vle64.v vd, (rs1)
+            # operands: [address, vector_reg]
+            riscv64ValidateOperands(operands, [Address, VecRegisterID], [Address, FPRegisterID])
+            addr = operands[0]
+            $asm.puts "vle64.v #{operands[1].riscv64VectorOperand}, (#{addr.base.riscv64Operand})"
         # A instructions
         when /^rv_amo(add|and|max(u)?|min(u)?|or|swap|xor)\.(d|w)(\.(aq|rl))?$/
             riscv64ValidateOperands(operands, [RegisterID, Address, RegisterID])

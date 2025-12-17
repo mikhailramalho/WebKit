@@ -575,7 +575,7 @@ WTF_ALLOW_UNSAFE_BUFFER_USAGE_END
     ALIGNMENT                                   \
     ALT_ENTRY(label)                            \
     ".globl " SYMBOL_STRING(label) "\n"         \
-    ".attribute arch, \"rv64gc\"" "\n"          \
+    ".attribute arch, \"rv64gcv\"" "\n"         \
     VISIBILITY(label) "\n"                      \
     SYMBOL_STRING(label) ":\n"
 #else
