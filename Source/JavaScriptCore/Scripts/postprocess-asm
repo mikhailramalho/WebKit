@@ -183,9 +183,11 @@ begin
   run_cmd(build_postprocessor_cmd(args))
   run_cmd(build_as_cmd(args, i_path))
 ensure
-  $intermediate_paths.each { |p|
-    if File.exist?(p)
-      File.delete(p)
-    end
-  }
+  unless ENV['PRESERVE_ASM']
+    $intermediate_paths.each { |p|
+      if File.exist?(p)
+        File.delete(p)
+      end
+    }
+  end
 end

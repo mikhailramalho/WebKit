@@ -504,6 +504,45 @@ public:
         m_assembler.mulInsn(dest, lhs, rhs);
     }
 
+    void div32(RegisterID dividend, RegisterID divisor, RegisterID dest)
+    {
+        m_assembler.divwInsn(dest, dividend, divisor);
+        m_assembler.maskRegister<32>(dest);
+    }
+
+    void uDiv32(RegisterID dividend, RegisterID divisor, RegisterID dest)
+    {
+        m_assembler.divuwInsn(dest, dividend, divisor);
+        m_assembler.maskRegister<32>(dest);
+    }
+
+    void div64(RegisterID dividend, RegisterID divisor, RegisterID dest)
+    {
+        m_assembler.divInsn(dest, dividend, divisor);
+    }
+
+    void uDiv64(RegisterID dividend, RegisterID divisor, RegisterID dest)
+    {
+        m_assembler.divuInsn(dest, dividend, divisor);
+    }
+
+    void multiplySub32(RegisterID mulLeft, RegisterID mulRight, RegisterID minuend, RegisterID dest)
+    {
+        // Compute: dest = minuend - (mulLeft * mulRight)
+        auto temp = temps<Data>();
+        m_assembler.mulwInsn(temp.data(), mulLeft, mulRight);
+        m_assembler.subwInsn(dest, minuend, temp.data());
+        m_assembler.maskRegister<32>(dest);
+    }
+
+    void multiplySub64(RegisterID mulLeft, RegisterID mulRight, RegisterID minuend, RegisterID dest)
+    {
+        // Compute: dest = minuend - (mulLeft * mulRight)
+        auto temp = temps<Data>();
+        m_assembler.mulInsn(temp.data(), mulLeft, mulRight);
+        m_assembler.subInsn(dest, minuend, temp.data());
+    }
+
     void extractUnsignedBitfield32(RegisterID src, TrustedImm32 lsb, TrustedImm32 width, RegisterID dest)
     {
         m_assembler.srliInsn(dest, src, std::clamp<int32_t>(lsb.m_value, 0, 31));
@@ -846,8 +885,130 @@ public:
         m_assembler.srliInsn(dest, src, uint32_t(imm.m_value & ((1 << 6) - 1)));
     }
 
-    MACRO_ASSEMBLER_RISCV64_TEMPLATED_NOOP_METHOD(rotateRight32);
-    MACRO_ASSEMBLER_RISCV64_TEMPLATED_NOOP_METHOD(rotateRight64);
+    void rotateRight32(RegisterID src, TrustedImm32 imm, RegisterID dest)
+    {
+        // RISC-V doesn't have native rotate instructions in the base ISA
+        // Implement rotate right as: (value >> shift) | (value << (32 - shift))
+        if (!imm.m_value) [[unlikely]]
+            return move(src, dest);
+        
+        uint32_t shift = imm.m_value & 31;
+        auto temp = temps<Data>();
+        
+        // temp = (src >> shift)
+        urshift32(src, TrustedImm32(shift), temp.data());
+        // dest = (src << (32 - shift))
+        lshift32(src, TrustedImm32(32 - shift), dest);
+        // dest = temp | dest
+        m_assembler.orInsn(dest, temp.data(), dest);
+        m_assembler.maskRegister<32>(dest);
+    }
+
+    void rotateRight32(RegisterID src, RegisterID shiftAmount, RegisterID dest)
+    {
+        auto temp = temps<Data, Memory>();
+       
+        // temp.data() = (src >> (shiftAmount & 31))
+        m_assembler.andiInsn(temp.memory(), shiftAmount, Imm::I(31));
+        urshift32(src, temp.memory(), temp.data());
+        
+        // temp.memory() = 32 - (shiftAmount & 31)
+        m_assembler.addiInsn(temp.memory(), RISCV64Registers::zero, Imm::I(32));
+        m_assembler.subwInsn(temp.memory(), temp.memory(), shiftAmount);
+        
+        // dest = (src << temp.memory())
+        lshift32(src, temp.memory(), dest);
+        
+        // dest = temp.data() | dest
+        m_assembler.orInsn(dest, temp.data(), dest);
+        m_assembler.maskRegister<32>(dest);
+    }
+
+    void rotateRight64(RegisterID src, TrustedImm32 imm, RegisterID dest)
+    {
+        // RISC-V doesn't have native rotate instructions in the base ISA
+        // Implement rotate right as: (value >> shift) | (value << (64 - shift))
+        if (!imm.m_value) [[unlikely]]
+            return move(src, dest);
+        
+        uint32_t shift = imm.m_value & 63;
+        auto temp = temps<Data>();
+        
+        // temp = (src >> shift)
+        urshift64(src, TrustedImm32(shift), temp.data());
+        // dest = (src << (64 - shift))
+        lshift64(src, TrustedImm32(64 - shift), dest);
+        // dest = temp | dest
+        m_assembler.orInsn(dest, temp.data(), dest);
+    }
+
+    void rotateRight64(RegisterID src, RegisterID shiftAmount, RegisterID dest)
+    {
+        auto temp = temps<Data, Memory>();
+        
+        // temp.data() = (src >> (shiftAmount & 63))
+        m_assembler.andiInsn(temp.memory(), shiftAmount, Imm::I(63));
+        urshift64(src, temp.memory(), temp.data());
+        
+        // temp.memory() = 64 - (shiftAmount & 63)
+        m_assembler.addiInsn(temp.memory(), RISCV64Registers::zero, Imm::I(64));
+        m_assembler.subInsn(temp.memory(), temp.memory(), shiftAmount);
+        
+        // dest = (src << temp.memory())
+        lshift64(src, temp.memory(), dest);
+        
+        // dest = temp.data() | dest
+        m_assembler.orInsn(dest, temp.data(), dest);
+    }
+
+    void rotateLeft32(RegisterID src, TrustedImm32 imm, RegisterID dest)
+    {
+        if (!imm.m_value) [[unlikely]]
+            return move(src, dest);
+        rotateRight32(src, TrustedImm32(-(imm.m_value & 31)), dest);
+    }
+
+    void rotateLeft32(RegisterID src, RegisterID shiftAmount, RegisterID dest)
+    {
+        auto temp = temps<Data>();
+        m_assembler.subwInsn(temp.data(), RISCV64Registers::zero, shiftAmount);
+        rotateRight32(src, temp.data(), dest);
+    }
+
+    void rotateLeft64(RegisterID src, TrustedImm32 imm, RegisterID dest)
+    {
+        if (!imm.m_value) [[unlikely]]
+            return move(src, dest);
+        rotateRight64(src, TrustedImm32(-(imm.m_value & 63)), dest);
+    }
+
+    void rotateLeft64(RegisterID src, RegisterID shiftAmount, RegisterID dest)
+    {
+        auto temp = temps<Data>();
+        m_assembler.subInsn(temp.data(), RISCV64Registers::zero, shiftAmount);
+        rotateRight64(src, temp.data(), dest);
+    }
+
+    void rotateRight32(TrustedImm32 imm, RegisterID srcDst)
+    {
+        rotateRight32(srcDst, imm, srcDst);
+    }
+
+    void rotateRight64(TrustedImm32 imm, RegisterID srcDst)
+    {
+        rotateRight64(srcDst, imm, srcDst);
+    }
+
+    void rotateLeft32(TrustedImm32 imm, RegisterID srcDst)
+    {
+        rotateLeft32(srcDst, imm, srcDst);
+    }
+
+    void rotateLeft64(TrustedImm32 imm, RegisterID srcDst)
+    {
+        rotateLeft64(srcDst, imm, srcDst);
+    }
+
 
     void load8(Address address, RegisterID dest)
     {
@@ -3992,6 +4153,116 @@ public:
         memoryFence();
         m_assembler.ldInsn(dest, resolution.base, Imm::I(resolution.offset));
         loadFence();
+    }
+
+    void atomicXchgAdd8(RegisterID src, Address address)
+    {
+        // RISC-V doesn't have native 8-bit atomic operations, so we need to use
+        // a load-reserved/store-conditional loop on 32-bit aligned memory
+        auto temp = temps<Data, Memory>();
+        auto resolution = resolveAddress(address, temp.memory());
+        
+        // Compute the effective address if needed
+        if (resolution.offset == 0) {
+            m_assembler.addiInsn(temp.data(), resolution.base, Imm::I(0));
+        } else if (Imm::isValid<Imm::IType>(resolution.offset)) {
+            m_assembler.addiInsn(temp.data(), resolution.base, Imm::I(resolution.offset));
+        } else {
+            loadImmediate(TrustedImm32(resolution.offset), temp.data());
+            m_assembler.addInsn(temp.data(), resolution.base, temp.data());
+        }
+        
+        // Align address to 32-bit boundary
+        m_assembler.andiInsn(temp.data(), temp.data(), Imm::I(-4));
+        
+        Label loop = label();
+        m_assembler.lrwInsn(temp.memory(), temp.data(), { Assembler::MemoryAccess::Acquire });
+        
+        // Save old value and add src
+        RegisterID oldValue = temp.memory();
+        m_assembler.addwInsn(src, oldValue, src);
+        
+        m_assembler.scwInsn(src, temp.data(), src, { Assembler::MemoryAccess::Release });
+        branchTest32(ResultCondition::NonZero, src).linkTo(loop, this);
+        
+        // Extract the old byte value into src
+        m_assembler.andiInsn(src, oldValue, Imm::I(0xff));
+    }
+
+    void atomicXchgAdd16(RegisterID src, Address address)
+    {
+        // RISC-V doesn't have native 16-bit atomic operations, so we need to use
+        // a load-reserved/store-conditional loop on 32-bit aligned memory
+        auto temp = temps<Data, Memory>();
+        auto resolution = resolveAddress(address, temp.memory());
+        
+        // Compute the effective address if needed
+        if (resolution.offset == 0) {
+            m_assembler.addiInsn(temp.data(), resolution.base, Imm::I(0));
+        } else if (Imm::isValid<Imm::IType>(resolution.offset)) {
+            m_assembler.addiInsn(temp.data(), resolution.base, Imm::I(resolution.offset));
+        } else {
+            loadImmediate(TrustedImm32(resolution.offset), temp.data());
+            m_assembler.addInsn(temp.data(), resolution.base, temp.data());
+        }
+        
+        // Align address to 32-bit boundary
+        m_assembler.andiInsn(temp.data(), temp.data(), Imm::I(-4));
+        
+        Label loop = label();
+        m_assembler.lrwInsn(temp.memory(), temp.data(), { Assembler::MemoryAccess::Acquire });
+        
+        // Save old value and add src
+        RegisterID oldValue = temp.memory();
+        m_assembler.addwInsn(src, oldValue, src);
+        
+        m_assembler.scwInsn(src, temp.data(), src, { Assembler::MemoryAccess::Release });
+        branchTest32(ResultCondition::NonZero, src).linkTo(loop, this);
+        
+        // Extract the old halfword value into src
+        m_assembler.andiInsn(src, oldValue, Imm::I(0xffff));
+    }
+
+    void atomicXchgAdd32(RegisterID src, Address address)
+    {
+        // For 32-bit, we can use the native AMOADD.W instruction
+        auto temp = temps<Memory>();
+        auto resolution = resolveAddress(address, temp.memory());
+        
+        // AMOADD.W rd, rs2, (rs1): rd = Mem[rs1]; Mem[rs1] = rs2 + Mem[rs1]
+        if (resolution.offset == 0) {
+            m_assembler.amoaddwInsn(src, resolution.base, src, { Assembler::MemoryAccess::Acquire, Assembler::MemoryAccess::Release });
+        } else {
+            // Need to compute effective address first
+            if (Imm::isValid<Imm::IType>(resolution.offset))
+                m_assembler.addiInsn(temp.memory(), resolution.base, Imm::I(resolution.offset));
+            else {
+                loadImmediate(TrustedImm32(resolution.offset), temp.memory());
+                m_assembler.addInsn(temp.memory(), resolution.base, temp.memory());
+            }
+            m_assembler.amoaddwInsn(src, temp.memory(), src, { Assembler::MemoryAccess::Acquire, Assembler::MemoryAccess::Release });
+        }
+    }
+
+    void atomicXchgAdd64(RegisterID src, Address address)
+    {
+        // For 64-bit, we can use the native AMOADD.D instruction
+        auto temp = temps<Memory>();
+        auto resolution = resolveAddress(address, temp.memory());
+        
+        // AMOADD.D rd, rs2, (rs1): rd = Mem[rs1]; Mem[rs1] = rs2 + Mem[rs1]
+        if (resolution.offset == 0) {
+            m_assembler.amoadddInsn(src, resolution.base, src, { Assembler::MemoryAccess::Acquire, Assembler::MemoryAccess::Release });
+        } else {
+            // Need to compute effective address first
+            if (Imm::isValid<Imm::IType>(resolution.offset))
+                m_assembler.addiInsn(temp.memory(), resolution.base, Imm::I(resolution.offset));
+            else {
+                loadImmediate(TrustedImm32(resolution.offset), temp.memory());
+                m_assembler.addInsn(temp.memory(), resolution.base, temp.memory());
+            }
+            m_assembler.amoadddInsn(src, temp.memory(), src, { Assembler::MemoryAccess::Acquire, Assembler::MemoryAccess::Release });
+        }
     }
 
     void moveConditionally32(RelationalCondition cond, RegisterID lhs, RegisterID rhs, RegisterID src, RegisterID dest)

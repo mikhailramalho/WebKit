@@ -27,6 +27,12 @@
 
 #include <JavaScriptCore/MacroAssembler.h>
 #include <JavaScriptCore/ProbeStack.h>
+
+#if CPU(RISCV64)
+#define SIMDE_WASM_SIMD128_ENABLE_NATIVE_ALIASES
+#endif
+#include <wtf/WasmSIMD128.h>
+
 #include <wtf/TZoneMalloc.h>
 
 #if ENABLE(ASSEMBLER)
@@ -47,7 +53,7 @@ struct CPUState {
     inline UCPURegister& gpr(RegisterID);
     inline UCPURegister& spr(SPRegisterID);
     template<SavedFPWidth = SavedFPWidth::DontSaveVectors> inline double& fpr(FPRegisterID);
-#if CPU(X86_64) || CPU(ARM64)
+#if CPU(X86_64) || CPU(ARM64) || CPU(RISCV64)
     inline v128_t& vector(FPRegisterID);
 #endif
 
@@ -66,7 +72,7 @@ struct CPUState {
     UCPURegister sprs[MacroAssembler::numberOfSPRegisters()];
     union {
         double fprs[MacroAssembler::numberOfFPRegisters()];
-#if CPU(X86_64) || CPU(ARM64)
+#if CPU(X86_64) || CPU(ARM64) || CPU(RISCV64)
         v128_t vectors[MacroAssembler::numberOfFPRegisters()] = { };
 #endif
     } fprs;
@@ -85,18 +91,23 @@ inline UCPURegister& CPUState::spr(SPRegisterID id)
 }
 
 template<SavedFPWidth savedFPWidth>
-inline double& CPUState::fpr(FPRegisterID id)
+double& CPUState::fpr(FPRegisterID id)
 {
     ASSERT(id >= MacroAssembler::firstFPRegister() && id <= MacroAssembler::lastFPRegister());
-#if CPU(X86_64) || CPU(ARM64)
+#if CPU(X86_64) || CPU(ARM64) || CPU(RISCV64)
+#if CPU(RISCV64)
+    // For RISCV64, v128_t is a GCC vector type, not a struct, so we need to cast
+    return (savedFPWidth == SavedFPWidth::SaveVectors) ? reinterpret_cast<double*>(&fprs.vectors[id])[0] : fprs.fprs[id];
+#else
     return (savedFPWidth == SavedFPWidth::SaveVectors) ? fprs.vectors[id].f64x2[0] : fprs.fprs[id];
+#endif
 #else
     ASSERT(savedFPWidth == SavedFPWidth::DontSaveVectors);
     return fprs.fprs[id];
 #endif
 }
 
-#if CPU(X86_64) || CPU(ARM64)
+#if CPU(X86_64) || CPU(ARM64) || CPU(RISCV64)
 inline v128_t& CPUState::vector(FPRegisterID id)
 {
     ASSERT(id >= MacroAssembler::firstFPRegister() && id <= MacroAssembler::lastFPRegister());
@@ -239,7 +250,7 @@ public:
             return cpu.fpr<SavedFPWidth::SaveVectors>(id);
         return cpu.fpr<SavedFPWidth::DontSaveVectors>(id);
     }
-#if CPU(X86_64) || CPU(ARM64)
+#if CPU(X86_64) || CPU(ARM64) || CPU(RISCV64)
     v128_t& vector(FPRegisterID id) { return cpu.vector(id); }
 #endif
     ASCIILiteral gprName(RegisterID id) { return cpu.gprName(id); }
